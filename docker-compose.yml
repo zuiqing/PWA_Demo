@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    network_mode: host
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml
+    restart: unless-stopped
+  
+  # Optional: Nginx to serve the front-end (built 'dist' folder)
+  nginx:
+    image: nginx:stable-alpine
+    container_name: monitor-ui
+    ports:
+      - "8081:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped

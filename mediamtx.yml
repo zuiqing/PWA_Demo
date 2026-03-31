@@ -1,0 +1,57 @@
+###############################################
+# MediaMTX Production Configuration
+# Optimized for Surveillance Preview
+###############################################
+
+# Log level
+logLevel: debug
+logDestinations: [stdout]
+
+# Authentication - allow API from any IP (no password) to enable front-end dynamic path updates
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: api
+      - action: read
+        path:
+      - action: playback
+        path:
+
+# API for dynamic path management
+api: yes
+apiAddress: :9997
+apiAllowOrigins: ['*']
+
+# RTSP server
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [udp, multicast, tcp]
+
+# WebRTC (WHEP) for browser playback
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigins: ['*']
+webrtcLocalUDPAddress: :8189
+webrtcAdditionalHosts: ['3.121.98.176']
+
+# Path defaults - Optimization: Source on Demand
+pathDefaults:
+  # Only pull the stream when someone is watching
+  sourceOnDemand: yes
+  sourceOnDemandStartTimeout: 10s
+  sourceOnDemandCloseAfter: 10s
+  # Performance: do not record by default
+  record: no
+
+# Pre-defined paths (Optional, paths can also be added via API)
+paths:
+  # This matches the 'mystream' we used for testing
+  mystream:
+    source: rtsp://admin:admin@63.176.198.52:55802/mode=real&idc=1&ids=1
+    rtspTransport: tcp
+  
+  # Example for dynamic paths (Any path will be tried as RTSP if not defined)
+  # You can add more devices here or via the API
