@@ -98,9 +98,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
-        name: 'QV 监控',
-        short_name: 'QV监控',
-        description: 'QV IoT 设备视频监控管理',
+        name: 'QUALVISION Cloud API',
+        short_name: 'QUALVISION',
+        description: 'QUALVISION Cloud API',
         theme_color: '#0D47A1',
         background_color: '#F5F5F5',
         display: 'standalone',

@@ -342,9 +342,8 @@ export default function DocViewerPage() {
                     </Box>
                   </Box>
                 ),
-                code: ({ inline, className, children, node, ...props }) => {
+                code: ({ className, children }) => {
                   const match = /language-(\w+)/.exec(className || '')
-                  // 提取代码文本 - children可能是字符串或数组
                   const getCodeText = (c: any): string => {
                     if (!c) return ''
                     if (typeof c === 'string') return c
@@ -353,7 +352,7 @@ export default function DocViewerPage() {
                     return ''
                   }
                   const codeText = getCodeText(children)
-                  if (!inline && match) {
+                  if (match) {
                     return (
                       <Box sx={{ position: 'relative', mb: 2 }}>
                         <IconButton
@@ -373,6 +372,7 @@ export default function DocViewerPage() {
                         </IconButton>
                         <Box
                           component="code"
+                          className={className}
                           sx={{
                             display: 'block',
                             p: 2,
@@ -385,7 +385,6 @@ export default function DocViewerPage() {
                             color: '#ABB2BF',
                             maxHeight: 400,
                           }}
-                          {...props}
                         >
                           {children}
                         </Box>
@@ -395,6 +394,7 @@ export default function DocViewerPage() {
                   return (
                     <Box
                       component="code"
+                      className={className}
                       sx={{
                         px: 0.5,
                         py: 0.25,
@@ -404,7 +404,6 @@ export default function DocViewerPage() {
                         fontSize: '0.9em',
                         color: '#E06C75',
                       }}
-                      {...props}
                     >
                       {children}
                     </Box>
