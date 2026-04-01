@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AppBar, Toolbar, Typography, Button, Container, Card, CardContent,
-  Box, IconButton, Chip, Snackbar, Alert, Fab, BottomNavigation,
-  BottomNavigationAction, Skeleton, Switch, FormControlLabel,
+  Box, IconButton, Snackbar, Alert, Fab, BottomNavigation,
+  BottomNavigationAction, ToggleButton, ToggleButtonGroup,
 } from '@mui/material'
-import { Add, Videocam, Delete, Refresh, Settings, Info, PlayCircle } from '@mui/icons-material'
+import { Add, Videocam, Delete, Refresh, Settings, BugReport } from '@mui/icons-material'
 import { useDeviceContext } from '../context/DeviceContext'
+import { useLanguage } from '../context/LanguageContext'
 import AddDeviceDialog from './AddDeviceDialog'
 
 export default function DeviceListPage() {
   const navigate = useNavigate()
-  const { state, demoMode, toggleDemoMode, addDevice, removeDevice, refreshConnection } = useDeviceContext()
+  const { state, addDevice, removeDevice, refreshConnection } = useDeviceContext()
+  const { language, setLanguage, t } = useLanguage()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [toast, setToast] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' })
   const [navValue, setNavValue] = useState(0)
@@ -19,13 +21,13 @@ export default function DeviceListPage() {
 
   const handleAdd = async (device: Parameters<typeof addDevice>[0]) => {
     await addDevice(device)
-    setToast({ open: true, msg: `设备 ${device.name} 添加成功`, severity: 'success' })
+    setToast({ open: true, msg: t('device.list.added', { name: device.name }), severity: 'success' })
   }
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`确定删除设备 ${name}？`)) {
+    if (confirm(t('device.list.deleteConfirm', { name }))) {
       removeDevice(id)
-      setToast({ open: true, msg: `设备 ${name} 已删除`, severity: 'success' })
+      setToast({ open: true, msg: t('device.list.deleted', { name }), severity: 'success' })
     }
   }
 
@@ -33,13 +35,13 @@ export default function DeviceListPage() {
     setRefreshingId(id)
     await refreshConnection(id)
     setRefreshingId(null)
-    setToast({ open: true, msg: '连接已刷新', severity: 'success' })
+    setToast({ open: true, msg: t('device.list.connectionRefreshed'), severity: 'success' })
   }
 
   const formatTime = (iso?: string) => {
-    if (!iso) return '从未连接'
+    if (!iso) return t('device.list.never')
     const d = new Date(iso)
-    return d.toLocaleString('zh-CN')
+    return d.toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')
   }
 
   return (
@@ -47,17 +49,36 @@ export default function DeviceListPage() {
       <AppBar position="fixed" elevation={0} sx={{ background: 'linear-gradient(135deg, #0D47A1 0%, #1565C0 100%)' }}>
         <Toolbar>
           <Videocam sx={{ mr: 1.5 }} />
-          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>QV 监控</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FormControlLabel
-              control={<Switch checked={demoMode} onChange={toggleDemoMode} size="small" />}
-              label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.87)' }}>演示模式</Typography>}
-              sx={{ mr: 1 }}
-            />
-            <Button color="inherit" variant="outlined" size="small" startIcon={<Add />} onClick={() => setDialogOpen(true)} sx={{ borderColor: 'rgba(255,255,255,0.5)' }}>
-              添加
-            </Button>
-          </Box>
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>QUALVISION Cloud API</Typography>
+          <ToggleButtonGroup
+            value={language}
+            exclusive
+            onChange={(_, value) => value && setLanguage(value)}
+            size="small"
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.1)',
+              mr: 1,
+              '& .MuiToggleButton-root': {
+                color: 'rgba(255,255,255,0.7)',
+                border: 'none',
+                px: 1.5,
+                py: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                },
+              },
+            }}
+          >
+            <ToggleButton value="en">EN</ToggleButton>
+            <ToggleButton value="zh">中文</ToggleButton>
+          </ToggleButtonGroup>
+          <Button color="inherit" variant="outlined" size="small" startIcon={<Add />} onClick={() => setDialogOpen(true)} sx={{ borderColor: 'rgba(255,255,255,0.5)', mr: 1 }}>
+            {t('common.add')}
+          </Button>
+          <IconButton color="inherit" onClick={() => navigate('/debug')}>
+            <BugReport />
+          </IconButton>
         </Toolbar>
       </AppBar>
 
@@ -65,20 +86,13 @@ export default function DeviceListPage() {
         {state.devices.length === 0 ? (
           <Box sx={{ textAlign: 'center', mt: 8, px: 2 }}>
             <Videocam sx={{ fontSize: 80, color: '#B0BEC5', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>暂无设备</Typography>
+            <Typography variant="h6" color="text.secondary" gutterBottom>{t('device.list.empty')}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {demoMode ? '演示模式已开启，已自动添加一个演示设备' : '点击下方按钮添加您的第一个 IoT 摄像头设备'}
+              {t('device.list.emptyHint')}
             </Typography>
-            {!demoMode && (
-              <Button variant="contained" startIcon={<Add />} onClick={() => setDialogOpen(true)} sx={{ px: 4 }}>
-                添加设备
-              </Button>
-            )}
-            {demoMode && state.devices.length > 0 && (
-              <Button variant="outlined" startIcon={<PlayCircle />} onClick={() => navigate(`/device/${state.devices[0].id}`)} sx={{ px: 4 }}>
-                查看演示设备
-              </Button>
-            )}
+            <Button variant="contained" startIcon={<Add />} onClick={() => setDialogOpen(true)} sx={{ px: 4 }}>
+              {t('device.list.addDevice')}
+            </Button>
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -94,9 +108,6 @@ export default function DeviceListPage() {
                       <IconButton size="small" onClick={() => handleRefresh(device.id)} disabled={refreshingId === device.id}>
                         <Refresh sx={{ fontSize: 18, animation: refreshingId === device.id ? 'spin 1s linear infinite' : 'none' }} />
                       </IconButton>
-                      <IconButton size="small" onClick={() => navigate(`/device/${device.id}`)}>
-                        <Info sx={{ fontSize: 18 }} />
-                      </IconButton>
                       <IconButton size="small" onClick={() => handleDelete(device.id, device.name)}>
                         <Delete sx={{ fontSize: 18, color: '#F44336' }} />
                       </IconButton>
@@ -106,22 +117,24 @@ export default function DeviceListPage() {
                     ID: {device.id.substring(0, 20)}{device.id.length > 20 ? '...' : ''}
                   </Typography>
                   {device.online && device.connection?.httpAddr && (
-                    <Chip 
-                      label={`${device.connection.httpAddr.remote_addr}:${device.connection.httpAddr.port}`} 
-                      size="small" 
-                      variant="outlined" 
-                      sx={{ mr: 1, mb: 1, fontSize: '11px' }} 
-                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      CGI: {device.connection.httpAddr.remote_addr}
+                    </Typography>
+                  )}
+                  {device.online && device.connection?.rtspAddr && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      RTSP: {device.connection.rtspAddr.remote_addr}
+                    </Typography>
                   )}
                   <Typography variant="caption" color="text.secondary" display="block">
                     {formatTime(device.lastConnected)}
                   </Typography>
                   <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
                     <Button size="small" variant="contained" startIcon={<Videocam />} onClick={() => navigate(`/device/${device.id}`)} sx={{ flex: 1, fontSize: '12px' }}>
-                      查看详情
+                      {t('device.list.viewDevice')}
                     </Button>
                     <Button size="small" variant="outlined" startIcon={<Settings />} onClick={() => navigate(`/device/${device.id}/config`)} sx={{ flex: 1, fontSize: '12px' }}>
-                      设备配置
+                      {t('device.list.deviceConfig')}
                     </Button>
                   </Box>
                 </CardContent>
@@ -141,9 +154,8 @@ export default function DeviceListPage() {
 
       <Box sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'background.paper', borderTop: '1px solid #E0E0E0' }}>
         <BottomNavigation value={navValue} onChange={(_, v) => setNavValue(v)} showLabels>
-          <BottomNavigationAction label="设备" icon={<Videocam />} onClick={() => navigate('/')} />
-          <BottomNavigationAction label="消息" icon={<Info />} />
-          <BottomNavigationAction label="设置" icon={<Settings />} onClick={() => navigate('/settings')} />
+          <BottomNavigationAction label={t('common.devices')} icon={<Videocam />} onClick={() => navigate('/')} />
+          <BottomNavigationAction label={t('common.settings')} icon={<Settings />} onClick={() => navigate('/settings')} />
         </BottomNavigation>
       </Box>
 

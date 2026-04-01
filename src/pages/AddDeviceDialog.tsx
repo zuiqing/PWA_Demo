@@ -4,6 +4,7 @@ import {
   TextField, Button, CircularProgress, Alert, Typography,
 } from '@mui/material'
 import type { DeviceInfo } from '../types/device'
+import { useLanguage } from '../context/LanguageContext'
 
 interface AddDeviceDialogProps {
   open: boolean
@@ -12,6 +13,7 @@ interface AddDeviceDialogProps {
 }
 
 export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDialogProps) {
+  const { t } = useLanguage()
   const [form, setForm] = useState({ deviceId: '', deviceName: '', username: 'admin', password: 'admin' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -25,32 +27,40 @@ export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDi
 
   const handleSubmit = async () => {
     if (!form.deviceId) {
-      setError('请填写设备ID')
+      setError(t('addDevice.errorNoId'))
       return
     }
-    
+
     // 验证是否有预设的API Key
     const savedApiKey = localStorage.getItem('qv_api_key_secret')
     if (!savedApiKey) {
-      setError('请在设置页面配置API Key')
+      setError(t('addDevice.errorNoKey'))
       return
     }
-    
+
     setSaving(true)
     setError('')
     try {
       const device: DeviceInfo = {
         id: form.deviceId,
         name: form.deviceName || form.deviceId,
-        credentials: { 
-          username: form.username, 
-          password: form.password 
+        credentials: {
+          username: form.username,
+          password: form.password
         },
       }
       await onSubmit(device)
       handleClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '添加失败')
+      const msg = err instanceof Error ? err.message : ''
+      // Translate known error patterns
+      if (msg.includes('device offline')) {
+        setError(t('error.deviceOffline'))
+      } else if (msg.includes('authentication') || msg.includes('auth')) {
+        setError(t('error.authFailed'))
+      } else {
+        setError(msg || t('error.connectionFailed'))
+      }
     } finally {
       setSaving(false)
     }
@@ -62,63 +72,63 @@ export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDi
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 600, fontSize: '20px' }}>添加设备</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 600, fontSize: '20px' }}>{t('addDevice.title')}</DialogTitle>
       <DialogContent sx={{ pt: '16px !important' }}>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        
+
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          注意：API Key需要在设置页面配置，设备添加时使用预设的API Key
+          {t('api.description')}
         </Typography>
-        
-        <TextField 
-          label="设备 ID *" 
-          fullWidth 
-          margin="dense" 
-          size="small" 
-          value={form.deviceId} 
-          onChange={updateField('deviceId')} 
-          placeholder="设备唯一标识符" 
-          helperText="设备的唯一ID，从QV平台获取"
+
+        <TextField
+          label={t('addDevice.deviceId')}
+          fullWidth
+          margin="dense"
+          size="small"
+          value={form.deviceId}
+          onChange={updateField('deviceId')}
+          placeholder={t('addDevice.deviceIdHint')}
+          helperText={t('addDevice.deviceIdHint')}
         />
-        <TextField 
-          label="设备名称" 
-          fullWidth 
-          margin="dense" 
-          size="small" 
-          value={form.deviceName} 
-          onChange={updateField('deviceName')} 
-          placeholder="自定义名称，可选" 
-          helperText="便于识别的设备名称"
+        <TextField
+          label={t('addDevice.deviceName')}
+          fullWidth
+          margin="dense"
+          size="small"
+          value={form.deviceName}
+          onChange={updateField('deviceName')}
+          placeholder={t('addDevice.deviceNameHint')}
+          helperText={t('addDevice.deviceNameHint')}
         />
-        <TextField 
-          label="设备用户名" 
-          fullWidth 
-          margin="dense" 
-          size="small" 
-          value={form.username} 
-          onChange={updateField('username')} 
-          helperText="设备登录用户名，默认为admin"
+        <TextField
+          label={t('addDevice.username')}
+          fullWidth
+          margin="dense"
+          size="small"
+          value={form.username}
+          onChange={updateField('username')}
+          helperText={t('addDevice.usernameHint')}
         />
-        <TextField 
-          label="设备密码" 
-          fullWidth 
-          margin="dense" 
-          size="small" 
-          type="password" 
-          value={form.password} 
-          onChange={updateField('password')} 
-          helperText="设备登录密码，默认为admin"
+        <TextField
+          label={t('addDevice.password')}
+          fullWidth
+          margin="dense"
+          size="small"
+          type="password"
+          value={form.password}
+          onChange={updateField('password')}
+          helperText={t('addDevice.passwordHint')}
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={handleClose} color="inherit">取消</Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          disabled={saving || !form.deviceId} 
+        <Button onClick={handleClose} color="inherit">{t('addDevice.cancel')}</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={saving || !form.deviceId}
           startIcon={saving ? <CircularProgress size={16} /> : null}
         >
-          {saving ? '连接中...' : '添加'}
+          {saving ? t('addDevice.adding') : t('addDevice.add')}
         </Button>
       </DialogActions>
     </Dialog>

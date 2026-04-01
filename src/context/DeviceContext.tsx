@@ -143,7 +143,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       device.lastConnected = new Date().toISOString()
       dispatch({ type: 'ADD_DEVICE', payload: device })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '设备连接失败'
+      const msg = err instanceof Error ? err.message : 'Connection failed'
       dispatch({ type: 'SET_ERROR', payload: msg })
       throw err
     } finally {

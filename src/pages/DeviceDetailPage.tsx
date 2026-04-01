@@ -9,7 +9,7 @@ import { CopyAll as Copy, Info, SdCard, Wifi, Videocam, PlayArrow, Visibility, V
 import { ArrowBack, Settings, Refresh, RestartAlt, DeleteForever } from '@mui/icons-material'
 import mpegts from 'mpegts.js'
 import { useDeviceContext } from '../context/DeviceContext'
-import { DeviceApiClient } from '../api/device-api'
+import { DeviceApiClient, FeatureNotSupportedError } from '../api/device-api'
 import { MockDeviceApiClient } from '../api/mock-api'
 import { buildRtspUrl, getRtspPlayHint } from '../api/rtsp-helper'
 import type { DeviceStatus } from '../types/device'
@@ -31,6 +31,28 @@ function InfoRow({ label, value, onCopy }: { label: string; value: string; onCop
         {onCopy && <IconButton size="small" onClick={() => navigator.clipboard.writeText(value)}><Copy sx={{ fontSize: 14 }} /></IconButton>}
       </Box>
     </Box>
+  )
+}
+
+// 加载状态卡片组件
+function LoadingCard({ title, icon }: { title: string; icon: React.ReactNode }) {
+  return (
+    <Card>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          {icon}
+          <Typography variant="subtitle1" fontWeight={600}>{title}</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {[1, 2, 3].map(i => (
+            <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.8 }}>
+              <Skeleton width="30%" height={20} />
+              <Skeleton width="40%" height={20} />
+            </Box>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -240,7 +262,7 @@ export default function DeviceDetailPage() {
   const { demoMode, getDevice } = useDeviceContext()
   const device = getDevice(id || '')
   const [status, setStatus] = useState<DeviceStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // 改为false，不再阻塞整个页面
   const [error, setError] = useState('')
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null)
   const [toast, setToast] = useState<{ open: boolean; msg: string }>({ open: false, msg: '' })
@@ -250,11 +272,18 @@ export default function DeviceDetailPage() {
   })
   const [hasFetched, setHasFetched] = useState(false)
   const [showPlayer, setShowPlayer] = useState(false)
+  const [dataLoading, setDataLoading] = useState(true) // 新增：数据加载状态
+
+  // 追踪哪些功能不支持（用于隐藏UI）
+  const [notSupportedFeatures, setNotSupportedFeatures] = useState<Set<string>>(new Set())
 
   const fetchStatus = async () => {
     if (!device?.connection?.httpAddr) return
     setLoading(true)
+    setDataLoading(true) // 开始加载数据
     setError('')
+    setNotSupportedFeatures(new Set()) // 重置不支持的功能列表
+
     try {
       console.log('fetchStatus called, hasFetched:', hasFetched)
       let data
@@ -284,10 +313,18 @@ export default function DeviceDetailPage() {
       setHasFetched(true)
     } catch (err) {
       console.error('fetchStatus error:', err)
-      setError(err instanceof Error ? err.message : '获取状态失败')
+      // 检查是否是功能不支持的错误
+      if (err instanceof FeatureNotSupportedError) {
+        console.log('getDeviceStatus not supported by this device')
+        // 设备不支持获取状态，设置空状态
+        setStatus(null)
+      } else {
+        setError(err instanceof Error ? err.message : '获取状态失败')
+      }
     } finally {
       console.log('==== END fetchStatus ====')
       setLoading(false)
+      setDataLoading(false) // 数据加载完成
     }
   }
 
@@ -372,12 +409,11 @@ export default function DeviceDetailPage() {
 
       <Container maxWidth="sm" sx={{ flex: 1, pt: 10, pb: 4, overflow: 'auto' }}>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {loading ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={120} />)}
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* 设备信息卡片 - 加载中显示骨架屏，不支持则隐藏 */}
+          {dataLoading && !status ? (
+            <LoadingCard title="设备信息" icon={<Info sx={{ color: '#1565C0' }} />} />
+          ) : status ? (
             <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -389,7 +425,12 @@ export default function DeviceDetailPage() {
                 <InfoRow label="云 ID" value={device.id} onCopy />
               </CardContent>
             </Card>
+          ) : null}
 
+          {/* 网络状态卡片 - 加载中显示骨架屏，不支持则隐藏 */}
+          {dataLoading && !status ? (
+            <LoadingCard title="网络状态" icon={<Wifi sx={{ color: '#2196F3' }} />} />
+          ) : status ? (
             <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -402,7 +443,12 @@ export default function DeviceDetailPage() {
                 <InfoRow label="DNS" value={status?.network.dns || '-'} />
               </CardContent>
             </Card>
+          ) : null}
 
+          {/* 存储卡片 */}
+          {dataLoading && !status ? (
+            <LoadingCard title="存储" icon={<SdCard sx={{ color: '#FF9800' }} />} />
+          ) : status ? (
             <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -421,35 +467,38 @@ export default function DeviceDetailPage() {
                 ) : <Typography variant="body2" color="text.secondary">未检测到存储卡</Typography>}
               </CardContent>
             </Card>
+          ) : null}
 
-            <Card sx={{ border: '2px solid #1565C0' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <Videocam sx={{ color: '#1565C0' }} /><Typography variant="subtitle1" fontWeight={600}>实时监控预览</Typography>
-                  <Button 
-                    size="small" 
-                    variant="outlined"
-                    startIcon={showPlayer ? <VisibilityOff /> : <Visibility />}
-                    onClick={() => setShowPlayer(!showPlayer)}
-                    sx={{ ml: 'auto', borderRadius: 4, textTransform: 'none' }}
-                  >
-                    {showPlayer ? '关闭预览' : '开启预览'}
-                  </Button>
-                </Box>
-                
-                {showPlayer && <VideoPlayer url={rtspAddr} deviceId={id || 'unknown'} />}
+          {/* 视频监控预览卡片 */}
+          <Card sx={{ border: '2px solid #1565C0' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Videocam sx={{ color: '#1565C0' }} /><Typography variant="subtitle1" fontWeight={600}>实时监控预览</Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={showPlayer ? <VisibilityOff /> : <Visibility />}
+                  onClick={() => setShowPlayer(!showPlayer)}
+                  sx={{ ml: 'auto', borderRadius: 4, textTransform: 'none' }}
+                >
+                  {showPlayer ? '关闭预览' : '开启预览'}
+                </Button>
+              </Box>
 
-                <Box sx={{ bgcolor: '#F5F5F5', p: 1.5, borderRadius: 2, mb: 1.5, wordBreak: 'break-all' }}>
-                  <Typography variant="body2" fontFamily="monospace" fontSize="11px">{rtspAddr || '连接后显示'}</Typography>
-                </Box>
-                {rtspAddr && <Button size="small" startIcon={<Copy />} onClick={() => handleCopy(rtspAddr)} sx={{ mb: 1 }}>复制地址</Button>}
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'pre-line', mt: 1 }}>{getRtspPlayHint()}</Typography>
-              </CardContent>
-            </Card>
+              {showPlayer && <VideoPlayer url={rtspAddr} deviceId={id || 'unknown'} />}
 
-            <Button variant="contained" startIcon={<Refresh />} onClick={fetchStatus} fullWidth>刷新状态</Button>
-          </Box>
-        )}
+              <Box sx={{ bgcolor: '#F5F5F5', p: 1.5, borderRadius: 2, mb: 1.5, wordBreak: 'break-all' }}>
+                <Typography variant="body2" fontFamily="monospace" fontSize="11px">{rtspAddr || '连接后显示'}</Typography>
+              </Box>
+              {rtspAddr && <Button size="small" startIcon={<Copy />} onClick={() => handleCopy(rtspAddr)} sx={{ mb: 1 }}>复制地址</Button>}
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'pre-line', mt: 1 }}>{getRtspPlayHint()}</Typography>
+            </CardContent>
+          </Card>
+
+          <Button variant="contained" startIcon={<Refresh />} onClick={fetchStatus} fullWidth disabled={loading}>
+            {loading ? '刷新中...' : '刷新状态'}
+          </Button>
+        </Box>
       </Container>
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(p => ({ ...p, open: false }))} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>

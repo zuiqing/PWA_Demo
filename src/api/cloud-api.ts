@@ -109,6 +109,6 @@ export async function connectToDevice(
       rtspAddr
     }
   } catch (err) {
-    throw new Error(`设备连接失败: ${err instanceof Error ? err.message : '未知错误'}`)
+    throw new Error(`Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
   }
 }

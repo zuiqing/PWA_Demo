@@ -7,7 +7,7 @@ import {
 } from '@mui/material'
 import { ArrowBack, ExpandMore, Save, AccessTime, Flip, VolumeUp, NetworkCheck, Speed, Alarm, VideoLabel } from '@mui/icons-material'
 import { useDeviceContext } from '../context/DeviceContext'
-import { DeviceApiClient } from '../api/device-api'
+import { DeviceApiClient, FeatureNotSupportedError } from '../api/device-api'
 import type { DeviceStatus, VolumeConfig, FpsMode, NetworkConfig, ImageFlip, DeviceTime } from '../types/device'
 
 const WEEKS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
@@ -19,9 +19,20 @@ export default function DeviceConfigPage() {
   const { getDevice } = useDeviceContext()
   const device = getDevice(id || '')
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // 改为false，不再阻塞整个页面
   const [saving, setSaving] = useState<string | null>(null)
   const [toast, setToast] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' })
+
+  // 各个配置项的独立加载状态
+  const [timeLoading, setTimeLoading] = useState(true)
+  const [imageLoading, setImageLoading] = useState(true)
+  const [volumeLoading, setVolumeLoading] = useState(true)
+  const [fpsLoading, setFpsLoading] = useState(true)
+  const [networkLoading, setNetworkLoading] = useState(true)
+  const [alarmLoading, setAlarmLoading] = useState(true)
+
+  // 追踪哪些功能不支持（用于隐藏UI）
+  const [notSupportedFeatures, setNotSupportedFeatures] = useState<Set<string>>(new Set())
 
   const [deviceTime, setDeviceTime] = useState<DeviceTime>({ timezone: '', datatime: '' })
   const [imageFlip, setImageFlip] = useState<ImageFlip>({ mode: 0 })
@@ -39,34 +50,116 @@ export default function DeviceConfigPage() {
   useEffect(() => {
     const conn = device?.connection?.httpAddr
     if (!conn) return
-    
+
     const loadData = async () => {
-      setLoading(true)
       const client = getClient()
-      
+      setNotSupportedFeatures(new Set()) // 重置不支持的功能列表
+
+      // 并行加载所有配置数据
+      const loadPromises = [
+        // 时间设置
+        (async () => {
+          setTimeLoading(true)
+          try {
+            const time = await client.getProductTime()
+            setDeviceTime(time)
+          } catch (err) {
+            if (err instanceof FeatureNotSupportedError) {
+              setNotSupportedFeatures(prev => new Set(prev).add('time'))
+            } else {
+              setDeviceTime({ timezone: '', datatime: '' })
+            }
+          } finally {
+            setTimeLoading(false)
+          }
+        })(),
+        // 图像设置
+        (async () => {
+          setImageLoading(true)
+          try {
+            const flip = await client.getImageFlip()
+            setImageFlip(flip)
+          } catch (err) {
+            if (err instanceof FeatureNotSupportedError) {
+              setNotSupportedFeatures(prev => new Set(prev).add('image'))
+            } else {
+              setImageFlip({ mode: 0 })
+            }
+          } finally {
+            setImageLoading(false)
+          }
+        })(),
+        // 音量设置
+        (async () => {
+          setVolumeLoading(true)
+          try {
+            const vol = await client.getVolume()
+            setVolume(vol)
+          } catch (err) {
+            if (err instanceof FeatureNotSupportedError) {
+              setNotSupportedFeatures(prev => new Set(prev).add('volume'))
+            } else {
+              setVolume({ talk: { max_level: 12, min_level: 0, level: 3 }, prompt: { max_level: 12, min_level: 0, level: 3 } })
+            }
+          } finally {
+            setVolumeLoading(false)
+          }
+        })(),
+        // 帧率设置
+        (async () => {
+          setFpsLoading(true)
+          try {
+            const fps = await client.getFpsMode()
+            setFpsMode(fps)
+          } catch (err) {
+            if (err instanceof FeatureNotSupportedError) {
+              setNotSupportedFeatures(prev => new Set(prev).add('fps'))
+            } else {
+              setFpsMode({ mode: 0 })
+            }
+          } finally {
+            setFpsLoading(false)
+          }
+        })(),
+        // 网络设置
+        (async () => {
+          setNetworkLoading(true)
+          try {
+            const net = await client.getNetworkConfig()
+            setNetwork(net)
+          } catch (err) {
+            if (err instanceof FeatureNotSupportedError) {
+              setNotSupportedFeatures(prev => new Set(prev).add('network'))
+            } else {
+              setNetwork({ idhcp: true, address: '', submask: '', gateway: '', dns: '', secondarydns: '', httpport: 80, httpsport: 443 })
+            }
+          } finally {
+            setNetworkLoading(false)
+          }
+        })(),
+        // 报警设置
+        (async () => {
+          setAlarmLoading(true)
+          try {
+            const status = await client.getDeviceStatus()
+            setMotionEnabled(status.motionDetection.enabled)
+          } catch (err) {
+            if (err instanceof FeatureNotSupportedError) {
+              setNotSupportedFeatures(prev => new Set(prev).add('alarm'))
+            } else {
+              setMotionEnabled(true)
+            }
+          } finally {
+            setAlarmLoading(false)
+          }
+        })(),
+      ]
+
       try {
-        // 顺序加载数据，避免并发压力
-        const time = await client.getProductTime().catch(() => ({ timezone: '', datatime: '' }))
-        setDeviceTime(time)
-        
-        const flip = await client.getImageFlip().catch(() => ({ mode: 0 }))
-        setImageFlip(flip)
-        
-        const vol = await client.getVolume().catch(() => ({ talk: { max_level: 12, min_level: 0, level: 3 }, prompt: { max_level: 12, min_level: 0, level: 3 } }))
-        setVolume(vol)
-        
-        const fps = await client.getFpsMode().catch(() => ({ mode: 0 }))
-        setFpsMode(fps)
-        
-        const net = await client.getNetworkConfig().catch(() => network)
-        setNetwork(net)
-        
-        await client.getDeviceStatus().then(s => { setMotionEnabled(s.motionDetection.enabled) }).catch(() => {})
+        await Promise.all(loadPromises)
       } catch (err) {
         console.error('加载配置失败:', err)
         setToast({ open: true, msg: '部分配置加载失败', severity: 'error' })
-      } finally {
-        setLoading(false)
       }
     }
 
@@ -94,95 +187,139 @@ export default function DeviceConfigPage() {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="fixed" elevation={0} sx={{ background: 'linear-gradient(135deg, #0D47A1 0%, #1565C0 100%)' }}>
         <Toolbar>
-          <IconButton edge="start" color="inherit" onClick={() => navigate(`/device/${id}`)}><ArrowBack /></IconButton>
+          <IconButton edge="start" color="inherit" onClick={() => navigate('/')}><ArrowBack /></IconButton>
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>设备配置</Typography>
         </Toolbar>
       </AppBar>
 
       <Container maxWidth="sm" sx={{ flex: 1, pt: 10, pb: 4, overflow: 'auto' }}>
-        {loading ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} variant="rounded" height={100} />)}</Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Time */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Time - 功能不支持时隐藏 */}
+          {!notSupportedFeatures.has('time') && (
             <Accordion defaultExpanded disableGutters elevation={0} sx={{ bgcolor: 'background.paper', borderRadius: 3, '&:before': { display: 'none' }, border: '1px solid #E0E0E0' }}>
-              <AccordionSummary expandIcon={<ExpandMore />}><AccessTime sx={{ mr: 1, color: '#2196F3' }} /><Typography fontWeight={600}>时间设置</Typography></AccordionSummary>
+              <AccordionSummary expandIcon={timeLoading ? undefined : <ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <AccessTime sx={{ mr: 1, color: '#2196F3' }} />
+                  <Typography fontWeight={600}>时间设置</Typography>
+                  {timeLoading && <Box sx={{ ml: 2, display: 'flex', gap: 0.5 }}>{[1, 2, 3].map(i => <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#2196F3', animation: 'bounce 1s infinite', animationDelay: `${i * 0.1}s` }} />)}</Box>}
+                </Box>
+              </AccordionSummary>
               <AccordionDetails sx={{ pt: 0 }}>
                 <TextField label="时区" fullWidth size="small" value={deviceTime.timezone} disabled sx={{ mb: 2 }} />
                 <TextField label="当前时间" fullWidth size="small" value={deviceTime.datatime} disabled sx={{ mb: 2 }} />
-                <Button variant="contained" size="small" startIcon={saving === 'time' ? null : <Save />} disabled={saving === 'time'} onClick={() => save('时间', async () => { const t = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; await getClient().setProductTime(deviceTime.timezone, t); setDeviceTime(prev => ({ ...prev, datatime: t })) })}>同步当前时间</Button>
+                <Button variant="contained" size="small" startIcon={saving === 'time' ? null : <Save />} disabled={saving === 'time' || timeLoading} onClick={() => save('时间', async () => { const t = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; await getClient().setProductTime(deviceTime.timezone, t); setDeviceTime(prev => ({ ...prev, datatime: t })) })}>同步当前时间</Button>
               </AccordionDetails>
             </Accordion>
+          )}
 
-            {/* Image Flip */}
+          {/* Image Flip - 功能不支持时隐藏 */}
+          {!notSupportedFeatures.has('image') && (
             <Accordion disableGutters elevation={0} sx={{ bgcolor: 'background.paper', borderRadius: 3, '&:before': { display: 'none' }, border: '1px solid #E0E0E0' }}>
-              <AccordionSummary expandIcon={<ExpandMore />}><Flip sx={{ mr: 1, color: '#9C27B0' }} /><Typography fontWeight={600}>图像设置</Typography></AccordionSummary>
+              <AccordionSummary expandIcon={imageLoading ? undefined : <ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <Flip sx={{ mr: 1, color: '#9C27B0' }} />
+                  <Typography fontWeight={600}>图像设置</Typography>
+                  {imageLoading && <Box sx={{ ml: 2, display: 'flex', gap: 0.5 }}>{[1, 2, 3].map(i => <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#9C27B0', animation: 'bounce 1s infinite', animationDelay: `${i * 0.1}s` }} />)}</Box>}
+                </Box>
+              </AccordionSummary>
               <AccordionDetails>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography variant="body2">图像翻转</Typography>
-                  <Switch checked={imageFlip.mode === 1} onChange={e => { const m = e.target.checked ? 1 : 0; setImageFlip({ mode: m }); save('图像翻转', () => getClient().setImageFlip(m)) }} />
+                  <Switch checked={imageFlip.mode === 1} disabled={imageLoading} onChange={e => { const m = e.target.checked ? 1 : 0; setImageFlip({ mode: m }); save('图像翻转', () => getClient().setImageFlip(m)) }} />
                 </Box>
               </AccordionDetails>
             </Accordion>
+          )}
 
-            {/* Volume */}
+          {/* Volume - 功能不支持时隐藏 */}
+          {!notSupportedFeatures.has('volume') && (
             <Accordion disableGutters elevation={0} sx={{ bgcolor: 'background.paper', borderRadius: 3, '&:before': { display: 'none' }, border: '1px solid #E0E0E0' }}>
-              <AccordionSummary expandIcon={<ExpandMore />}><VolumeUp sx={{ mr: 1, color: '#FF9800' }} /><Typography fontWeight={600}>音频设置</Typography></AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" gutterBottom>通话音量: {volume.talk.level}</Typography>
-                <Slider value={volume.talk.level} min={volume.talk.min_level} max={volume.talk.max_level} onChange={(_, v) => setVolume(prev => ({ ...prev, talk: { ...prev.talk, level: v as number } }))} onChangeCommitted={() => save('音量', () => getClient().setVolume(volume.talk.level, volume.prompt.level))} />
-                <Typography variant="body2" sx={{ mt: 2 }} gutterBottom>提示音音量: {volume.prompt.level}</Typography>
-                <Slider value={volume.prompt.level} min={volume.prompt.min_level} max={volume.prompt.max_level} onChange={(_, v) => setVolume(prev => ({ ...prev, prompt: { ...prev.prompt, level: v as number } }))} onChangeCommitted={() => save('音量', () => getClient().setVolume(volume.talk.level, volume.prompt.level))} />
-              </AccordionDetails>
-            </Accordion>
+              <AccordionSummary expandIcon={volumeLoading ? undefined : <ExpandMore />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                <VolumeUp sx={{ mr: 1, color: '#FF9800' }} />
+                <Typography fontWeight={600}>音频设置</Typography>
+                {volumeLoading && <Box sx={{ ml: 2, display: 'flex', gap: 0.5 }}>{[1, 2, 3].map(i => <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#FF9800', animation: 'bounce 1s infinite', animationDelay: `${i * 0.1}s` }} />)}</Box>}
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" gutterBottom>通话音量: {volume.talk.level}</Typography>
+              <Slider value={volume.talk.level} min={volume.talk.min_level} max={volume.talk.max_level} disabled={volumeLoading} onChange={(_, v) => setVolume(prev => ({ ...prev, talk: { ...prev.talk, level: v as number } }))} onChangeCommitted={() => save('音量', () => getClient().setVolume(volume.talk.level, volume.prompt.level))} />
+              <Typography variant="body2" sx={{ mt: 2 }} gutterBottom>提示音音量: {volume.prompt.level}</Typography>
+              <Slider value={volume.prompt.level} min={volume.prompt.min_level} max={volume.prompt.max_level} disabled={volumeLoading} onChange={(_, v) => setVolume(prev => ({ ...prev, prompt: { ...prev.prompt, level: v as number } }))} onChangeCommitted={() => save('音量', () => getClient().setVolume(volume.talk.level, volume.prompt.level))} />
+            </AccordionDetails>
+          </Accordion>
+          )}
 
-            {/* Network */}
+          {/* Network - 功能不支持时隐藏 */}
+          {!notSupportedFeatures.has('network') && (
             <Accordion disableGutters elevation={0} sx={{ bgcolor: 'background.paper', borderRadius: 3, '&:before': { display: 'none' }, border: '1px solid #E0E0E0' }}>
-              <AccordionSummary expandIcon={<ExpandMore />}><NetworkCheck sx={{ mr: 1, color: '#4CAF50' }} /><Typography fontWeight={600}>网络设置</Typography></AccordionSummary>
+              <AccordionSummary expandIcon={networkLoading ? undefined : <ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <NetworkCheck sx={{ mr: 1, color: '#4CAF50' }} />
+                  <Typography fontWeight={600}>网络设置</Typography>
+                  {networkLoading && <Box sx={{ ml: 2, display: 'flex', gap: 0.5 }}>{[1, 2, 3].map(i => <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#4CAF50', animation: 'bounce 1s infinite', animationDelay: `${i * 0.1}s` }} />)}</Box>}
+                </Box>
+              </AccordionSummary>
               <AccordionDetails>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                   <Typography variant="body2">DHCP</Typography>
-                  <Switch checked={network.idhcp} onChange={e => setNetwork(prev => ({ ...prev, idhcp: e.target.checked }))} />
+                  <Switch checked={network.idhcp} disabled={networkLoading} onChange={e => setNetwork(prev => ({ ...prev, idhcp: e.target.checked }))} />
                 </Box>
                 {!network.idhcp && (
                   <>
-                    <TextField label="IP 地址" fullWidth size="small" value={network.address} onChange={e => setNetwork(prev => ({ ...prev, address: e.target.value }))} sx={{ mb: 1.5 }} />
-                    <TextField label="子网掩码" fullWidth size="small" value={network.submask} onChange={e => setNetwork(prev => ({ ...prev, submask: e.target.value }))} sx={{ mb: 1.5 }} />
-                    <TextField label="网关" fullWidth size="small" value={network.gateway} onChange={e => setNetwork(prev => ({ ...prev, gateway: e.target.value }))} sx={{ mb: 1.5 }} />
-                    <TextField label="DNS" fullWidth size="small" value={network.dns} onChange={e => setNetwork(prev => ({ ...prev, dns: e.target.value }))} sx={{ mb: 2 }} />
+                    <TextField label="IP 地址" fullWidth size="small" value={network.address} disabled={networkLoading} onChange={e => setNetwork(prev => ({ ...prev, address: e.target.value }))} sx={{ mb: 1.5 }} />
+                    <TextField label="子网掩码" fullWidth size="small" value={network.submask} disabled={networkLoading} onChange={e => setNetwork(prev => ({ ...prev, submask: e.target.value }))} sx={{ mb: 1.5 }} />
+                    <TextField label="网关" fullWidth size="small" value={network.gateway} disabled={networkLoading} onChange={e => setNetwork(prev => ({ ...prev, gateway: e.target.value }))} sx={{ mb: 1.5 }} />
+                    <TextField label="DNS" fullWidth size="small" value={network.dns} disabled={networkLoading} onChange={e => setNetwork(prev => ({ ...prev, dns: e.target.value }))} sx={{ mb: 2 }} />
                   </>
                 )}
-                <Button variant="contained" size="small" onClick={() => save('网络', () => getClient().setNetworkConfig(network))}>保存网络配置</Button>
+                <Button variant="contained" size="small" disabled={networkLoading} onClick={() => save('网络', () => getClient().setNetworkConfig(network))}>保存网络配置</Button>
               </AccordionDetails>
             </Accordion>
+          )}
 
-            {/* FPS */}
+          {/* FPS - 功能不支持时隐藏 */}
+          {!notSupportedFeatures.has('fps') && (
             <Accordion disableGutters elevation={0} sx={{ bgcolor: 'background.paper', borderRadius: 3, '&:before': { display: 'none' }, border: '1px solid #E0E0E0' }}>
-              <AccordionSummary expandIcon={<ExpandMore />}><Speed sx={{ mr: 1, color: '#00BCD4' }} /><Typography fontWeight={600}>视频设置</Typography></AccordionSummary>
+              <AccordionSummary expandIcon={fpsLoading ? undefined : <ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <Speed sx={{ mr: 1, color: '#00BCD4' }} />
+                  <Typography fontWeight={600}>视频设置</Typography>
+                  {fpsLoading && <Box sx={{ ml: 2, display: 'flex', gap: 0.5 }}>{[1, 2, 3].map(i => <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#00BCD4', animation: 'bounce 1s infinite', animationDelay: `${i * 0.1}s` }} />)}</Box>}
+                </Box>
+              </AccordionSummary>
               <AccordionDetails>
                 <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                   <InputLabel>帧率模式</InputLabel>
-                  <Select value={fpsMode.mode} label="帧率模式" onChange={e => { const m = e.target.value as number; setFpsMode({ mode: m }); save('帧率', () => getClient().setFpsMode(m)) }}>
+                  <Select value={fpsMode.mode} label="帧率模式" disabled={fpsLoading} onChange={e => { const m = e.target.value as number; setFpsMode({ mode: m }); save('帧率', () => getClient().setFpsMode(m)) }}>
                     <MenuItem value={0}>高 (20 fps)</MenuItem>
                     <MenuItem value={1}>中 (10 fps)</MenuItem>
                     <MenuItem value={2}>低 (仅关键帧)</MenuItem>
                   </Select>
-                </FormControl>
-              </AccordionDetails>
-            </Accordion>
+              </FormControl>
+            </AccordionDetails>
+          </Accordion>
+          )}
 
-            {/* Alarm */}
+          {/* Alarm - 功能不支持时隐藏 */}
+          {!notSupportedFeatures.has('alarm') && (
             <Accordion disableGutters elevation={0} sx={{ bgcolor: 'background.paper', borderRadius: 3, '&:before': { display: 'none' }, border: '1px solid #E0E0E0' }}>
-              <AccordionSummary expandIcon={<ExpandMore />}><Alarm sx={{ mr: 1, color: '#F44336' }} /><Typography fontWeight={600}>报警设置</Typography></AccordionSummary>
+              <AccordionSummary expandIcon={alarmLoading ? undefined : <ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <Alarm sx={{ mr: 1, color: '#F44336' }} />
+                  <Typography fontWeight={600}>报警设置</Typography>
+                  {alarmLoading && <Box sx={{ ml: 2, display: 'flex', gap: 0.5 }}>{[1, 2, 3].map(i => <Box key={i} sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#F44336', animation: 'bounce 1s infinite', animationDelay: `${i * 0.1}s` }} />)}</Box>}
+                </Box>
+              </AccordionSummary>
               <AccordionDetails>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography variant="body2">移动检测</Typography>
-                  <Switch checked={motionEnabled} onChange={e => setMotionEnabled(e.target.checked)} />
+                  <Switch checked={motionEnabled} disabled={alarmLoading} onChange={e => setMotionEnabled(e.target.checked)} />
                 </Box>
               </AccordionDetails>
             </Accordion>
-          </Box>
-        )}
+          )}
+        </Box>
       </Container>
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(p => ({ ...p, open: false }))} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>

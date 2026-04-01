@@ -3,43 +3,53 @@ import { useNavigate } from 'react-router-dom'
 import {
   AppBar, Toolbar, Typography, Container, Box, TextField,
   Button, Snackbar, Alert, Card, CardContent, IconButton,
+  ToggleButton, ToggleButtonGroup,
 } from '@mui/material'
-import { ArrowBack, Save, Key } from '@mui/icons-material'
+import { ArrowBack, Save, Key, Description, Language } from '@mui/icons-material'
+import { useLanguage } from '../context/LanguageContext'
 
 const DEFAULT_API_KEY_SECRET = 'ApiKey kE3FMfbjVYE8QkwkpyFh2Tfn:crow'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  const { language, setLanguage, t } = useLanguage()
   const [apiKeySecret, setApiKeySecret] = useState('')
+  const [savedSecret, setSavedSecret] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
   const [toast, setToast] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' })
 
   useEffect(() => {
     // 加载保存的 API Key Secret
     const saved = localStorage.getItem('qv_api_key_secret')
-    if (saved) {
+    if (saved && saved !== DEFAULT_API_KEY_SECRET) {
+      // 只加载非默认密钥的值
       setApiKeySecret(saved)
+      setSavedSecret(saved)
     } else {
-      // 如果没有保存的，使用默认值
-      setApiKeySecret(DEFAULT_API_KEY_SECRET)
+      // 默认密钥或未保存，都显示为空
+      setApiKeySecret('')
+      setSavedSecret(saved || '')
     }
   }, [])
 
   const handleSave = () => {
     try {
       localStorage.setItem('qv_api_key_secret', apiKeySecret)
-      setToast({ open: true, msg: 'API Key Secret 已保存', severity: 'success' })
+      setSavedSecret(apiKeySecret)
+      setToast({ open: true, msg: t('toast.saved'), severity: 'success' })
     } catch (err) {
-      setToast({ open: true, msg: '保存失败', severity: 'error' })
+      setToast({ open: true, msg: t('toast.saveFailed'), severity: 'error' })
     }
   }
 
   const handleReset = () => {
-    setApiKeySecret(DEFAULT_API_KEY_SECRET)
-    setToast({ open: true, msg: '已重置为默认值', severity: 'success' })
+    localStorage.setItem('qv_api_key_secret', DEFAULT_API_KEY_SECRET)
+    setApiKeySecret('')
+    setSavedSecret('')
+    setToast({ open: true, msg: t('toast.reset'), severity: 'success' })
   }
 
-  // API Key Secret 格式: "ApiKey kE3FMfbjVYE8QkwkpyFh2Tfn:crow"
-  // 直接作为 Authorization Header 使用，不需要拆分
+  const isDefaultSecret = savedSecret === DEFAULT_API_KEY_SECRET
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -48,7 +58,29 @@ export default function SettingsPage() {
           <IconButton color="inherit" edge="start" onClick={() => navigate(-1)} sx={{ mr: 1 }}>
             <ArrowBack />
           </IconButton>
-          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>应用设置</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>{t('app.settings')}</Typography>
+          <ToggleButtonGroup
+            value={language}
+            exclusive
+            onChange={(_, value) => value && setLanguage(value)}
+            size="small"
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.1)',
+              '& .MuiToggleButton-root': {
+                color: 'rgba(255,255,255,0.7)',
+                border: 'none',
+                px: 1.5,
+                py: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                },
+              },
+            }}
+          >
+            <ToggleButton value="en">EN</ToggleButton>
+            <ToggleButton value="zh">中文</ToggleButton>
+          </ToggleButtonGroup>
         </Toolbar>
       </AppBar>
 
@@ -57,32 +89,52 @@ export default function SettingsPage() {
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
               <Key sx={{ color: '#1565C0' }} />
-              <Typography variant="subtitle1" fontWeight={600}>API 密钥配置</Typography>
+              <Typography variant="subtitle1" fontWeight={600}>{t('api.title')}</Typography>
             </Box>
 
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              预设的 API Key Secret 将用于添加新设备时自动填充
+              {t('api.description')}
             </Typography>
 
             <TextField
               fullWidth
               multiline
               rows={3}
-              label="API Key Secret"
+              label={t('api.label')}
               value={apiKeySecret}
               onChange={(e) => setApiKeySecret(e.target.value)}
-              placeholder="格式: ApiKey kE3FMfbjVYE8QkwkpyFh2Tfn:crow"
-              helperText="完整的 Authorization Header 值"
+              placeholder={t('api.placeholder')}
+              helperText={t('api.helper')}
               sx={{ mb: 2 }}
             />
 
-            <Box sx={{ bgcolor: '#F5F5F5', p: 2, borderRadius: 1, mb: 2 }}>
+            <Button
+              size="small"
+              onClick={() => setShowSecret(!showSecret)}
+              disabled={isDefaultSecret}
+              sx={{ mb: 2 }}
+            >
+              {showSecret ? t('api.hide') : t('api.show')}
+            </Button>
+            {isDefaultSecret && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                {t('api.defaultWarning')}
+              </Typography>
+            )}
+
+            <Box sx={{ bgcolor: '#F5F5F5', p: 2, borderRadius: 1, mb: 2, userSelect: 'none' }}>
               <Typography variant="caption" color="text.secondary" display="block">
-                当前配置:
+                {t('api.savedConfig')}
               </Typography>
-              <Typography variant="body2" fontFamily="monospace" fontSize="12px">
-                {apiKeySecret}
-              </Typography>
+              {isDefaultSecret ? (
+                <Typography variant="body2" color="warning.main" fontSize="12px">
+                  {t('api.usingDefault')}
+                </Typography>
+              ) : (
+                <Typography variant="body2" fontFamily="monospace" fontSize="12px">
+                  {showSecret ? savedSecret : savedSecret.replace(/./g, '*')}
+                </Typography>
+              )}
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
@@ -92,7 +144,7 @@ export default function SettingsPage() {
                 onClick={handleReset}
                 sx={{ flex: 1 }}
               >
-                重置为默认
+                {t('api.reset')}
               </Button>
               <Button
                 variant="contained"
@@ -101,7 +153,7 @@ export default function SettingsPage() {
                 onClick={handleSave}
                 sx={{ flex: 1 }}
               >
-                保存配置
+                {t('api.save')}
               </Button>
             </Box>
           </CardContent>
@@ -110,20 +162,43 @@ export default function SettingsPage() {
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-              使用说明
+              {t('usage.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              1. 在此处设置默认的 API Key Secret
+              1. {t('usage.step1')}
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              2. 添加新设备时，API Key Secret 字段会自动填充此值
+              2. {t('usage.step2')}
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              3. 如果需要使用不同的密钥，可以在添加设备时手动修改
+              3. {t('usage.step3')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              4. 配置保存在浏览器本地存储中
+              4. {t('usage.step4')}
             </Typography>
+          </CardContent>
+        </Card>
+
+        {/* 文档链接 */}
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Description sx={{ color: '#1565C0', fontSize: 40 }} />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  {t('doc.title')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('doc.description')}
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                onClick={() => navigate('/doc')}
+              >
+                {t('doc.button')}
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       </Container>

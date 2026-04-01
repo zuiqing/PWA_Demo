@@ -3,7 +3,19 @@ import type { DeviceCgiJsonBody, DeviceCgiResponse } from '../types/api'
 import type { DeviceStatus, VolumeConfig, AlarmDetailInfo, RecordSchedule, NetworkConfig, FpsMode, ImageFlip, DeviceTime, RemoteAddr } from '../types/device'
 import { parseXmlResponse, buildXmlRequest } from '../utils/xml-parser'
 
+// CGI错误码定义
+export const CGI_ERROR_NOT_SUPPORTED = -1 // 功能不支持
+
+// 自定义错误类：功能不支持
+export class FeatureNotSupportedError extends Error {
+  constructor(message: string = 'This feature is not supported by the device') {
+    super(message)
+    this.name = 'FeatureNotSupportedError'
+  }
+}
+
 const CGI_PATH = '/tdkcgi'
+const CGI_TIMEOUT = 20000 // 20秒超时
 
 const JSON_COMMANDS = new Set([
   'get.alarm.detailInfo', 'set.alarm.detailInfo',
@@ -20,6 +32,17 @@ export class DeviceApiClient {
   private password: string
 
   constructor(remoteAddr: RemoteAddr, username: string, password: string) {
+    // 验证参数是否有效
+    if (!remoteAddr) {
+      throw new Error('Device remote address is required')
+    }
+    if (!remoteAddr.remote_addr || remoteAddr.remote_addr.trim() === '') {
+      throw new Error('Device remote address is empty')
+    }
+    if (!username || username.trim() === '') {
+      throw new Error('Device username is required')
+    }
+    
     this.remoteAddrObj = remoteAddr
     this.username = username
     this.password = password
@@ -30,13 +53,33 @@ export class DeviceApiClient {
     const remoteAddr = this.remoteAddrObj.remote_addr
     console.log('DeviceApiClient.buildUrl() original addr:', remoteAddr)
     
+    // 验证设备地址是否有效
+    if (!remoteAddr || remoteAddr.trim() === '') {
+      throw new Error('Device remote address is empty or undefined')
+    }
+    
+    // 验证地址格式（应该包含主机和端口）
+    if (!remoteAddr.includes(':')) {
+      throw new Error(`Invalid device address format: ${remoteAddr}. Expected format: host:port`)
+    }
+    
     // 移除协议前缀
     const hostPort = remoteAddr.replace(/^https?:\/\//, '')
-    // 组合两个候选代理地址（优先 HTTPS，再回退 HTTP）
+    
+    // 再次验证去除协议后的地址是否有效
+    if (!hostPort || hostPort.trim() === '') {
+      throw new Error('Invalid device address after removing protocol prefix')
+    }
+    
+    // 开发环境和生产环境都使用代理路径
+    // 开发环境：Vite代理会设置 secure: false 跳过SSL验证
+    // 生产环境：Nginx代理会处理SSL证书问题
     const httpsUrl = `/api/device-proxy-https/${hostPort}${CGI_PATH}`
     const httpUrl = `/api/device-proxy-http/${hostPort}${CGI_PATH}`
-    console.log('Using proxied device URLs (prefer https):', { httpsUrl, httpUrl })
-    // 返回首选（实际调用时如果失败会自动回退到 httpUrl）
+    
+    const isDev = import.meta.env.DEV
+    console.log(`[${isDev ? 'DEV' : 'PROD'}] Using proxy URLs:`, { httpsUrl, httpUrl })
+    
     return `${httpsUrl}||${httpUrl}`
   }
 
@@ -69,10 +112,14 @@ export class DeviceApiClient {
     const xmlBody = buildXmlRequest(this.username, this.password, command, content)
     console.log('Sending XML command to:', url, 'command:', command)
     console.log('Request body:', xmlBody)
-    
+
     try {
       console.log('Using fetch to:', url)
-      
+
+      // 使用 AbortController 实现超时
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), CGI_TIMEOUT)
+
       // 尝试使用fetch，但需要处理SSL证书问题
       // 对于自签名证书，浏览器会拒绝，但我们可以尝试不同的方法
       const response = await fetch(url, {
@@ -83,9 +130,12 @@ export class DeviceApiClient {
         body: xmlBody,
         mode: 'cors', // 尝试cors模式
         credentials: 'omit',
+        signal: controller.signal,
         // 注意：浏览器不允许在fetch中完全禁用SSL验证
         // 我们需要在开发环境中处理这个问题
       })
+
+      clearTimeout(timeoutId)
       
       console.log('Fetch response status:', response.status, 'ok:', response.ok)
       
@@ -97,14 +147,24 @@ export class DeviceApiClient {
       
       const responseText = await response.text()
       console.log('Fetch response text (first 500 chars):', responseText.substring(0, 500))
-      
+
       const parsed = parseXmlResponse(responseText)
       const error = parsed.error as number
+
+      // 特殊处理 error === -1，表示设备不支持该功能
+      if (error === CGI_ERROR_NOT_SUPPORTED) {
+        throw new FeatureNotSupportedError(`Command not supported: ${command}`)
+      }
+
       if (error !== undefined && error !== 0) {
         throw new Error(`CGI error: ${error}`)
       }
       return parsed.content as Record<string, unknown> || {}
     } catch (error: any) {
+      // 检查是否是超时错误
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${CGI_TIMEOUT / 1000} seconds`)
+      }
       console.error('sendXmlCommand error details:', {
         url,
         command,
@@ -112,7 +172,7 @@ export class DeviceApiClient {
         errorName: error.name,
         errorStack: error.stack,
       })
-      
+
       // 如果fetch失败，尝试使用XMLHttpRequest作为备选方案
       console.log('Fetch failed, trying XMLHttpRequest as fallback...')
       return this.sendXmlCommandWithXHR(url, command, xmlBody)
@@ -121,18 +181,22 @@ export class DeviceApiClient {
 
   private async sendJsonCommand(url: string, command: string, content: Record<string, unknown>): Promise<Record<string, unknown>> {
     const requestBody = {
-      header: { 
-        security: 'username', 
-        username: this.username, 
-        password: this.password, 
+      header: {
+        security: 'username',
+        username: this.username,
+        password: this.password,
         passwordencode: "1" // 改为字符串 "1" 并默认启用
       },
       body: { command, content },
     }
     console.log('Sending JSON command to:', url, 'command:', command)
     console.log('Request body:', JSON.stringify(requestBody, null, 2))
-    
+
     try {
+      // 使用 AbortController 实现超时
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), CGI_TIMEOUT)
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -141,7 +205,10 @@ export class DeviceApiClient {
         body: JSON.stringify(requestBody),
         mode: 'cors',
         credentials: 'omit',
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
       
       console.log('Fetch response status:', response.status, 'ok:', response.ok)
       
@@ -162,16 +229,25 @@ export class DeviceApiClient {
       }
 
       console.log('Parsed response data:', responseData)
-      
+
       // 兼容两种结构：直接在根部的 body 或嵌套 of body
       const resBody = responseData.body || responseData
       const error = resBody.error !== undefined ? resBody.error : resBody.code
-      
+
+      // 特殊处理 error === -1，表示设备不支持该功能
+      if (error === CGI_ERROR_NOT_SUPPORTED) {
+        throw new FeatureNotSupportedError(`Command not supported: ${command}`)
+      }
+
       if (error !== 0 && error !== undefined) {
         throw new Error(`CGI error: ${error}`)
       }
       return (resBody.content as Record<string, unknown>) || resBody.data || {}
     } catch (error: any) {
+      // 检查是否是超时错误
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${CGI_TIMEOUT / 1000} seconds`)
+      }
       console.error('sendJsonCommand error details:', {
         url,
         command,
@@ -192,7 +268,7 @@ export class DeviceApiClient {
       xhr.setRequestHeader('Content-Type', 'application/xml')
       
       // 设置超时
-      xhr.timeout = 30000 // 30秒
+      xhr.timeout = CGI_TIMEOUT
       
       xhr.onload = () => {
         console.log('XHR response status:', xhr.status, 'readyState:', xhr.readyState)
@@ -200,11 +276,15 @@ export class DeviceApiClient {
         if (xhr.status >= 200 && xhr.status < 300) {
           const responseText = xhr.responseText
           console.log('XHR response text (first 500 chars):', responseText.substring(0, 500))
-          
+
           try {
             const parsed = parseXmlResponse(responseText)
             const error = parsed.error as number
-            if (error !== undefined && error !== 0) {
+
+            // 特殊处理 error === -1，表示设备不支持该功能
+            if (error === CGI_ERROR_NOT_SUPPORTED) {
+              reject(new FeatureNotSupportedError(`Command not supported: ${command}`))
+            } else if (error !== undefined && error !== 0) {
               reject(new Error(`CGI error: ${error}`))
             } else {
               resolve(parsed.content as Record<string, unknown> || {})
@@ -227,7 +307,7 @@ export class DeviceApiClient {
       
       xhr.ontimeout = () => {
         console.error('XHR timeout')
-        reject(new Error('Request timed out after 30 seconds'))
+        reject(new Error(`Request timed out after ${CGI_TIMEOUT / 1000} seconds`))
       }
       
       xhr.send(xmlBody)
@@ -377,5 +457,49 @@ export class DeviceApiClient {
 
   getRemoteAddr(): string {
     return this.remoteAddrObj.remote_addr
+  }
+
+  /**
+   * 发送原始XML请求（用于调试）
+   * @param xmlBody 原始XML字符串
+   * @returns 解析后的响应内容
+   */
+  async sendRawXml(xmlBody: string): Promise<Record<string, unknown>> {
+    const combined = this.buildUrl()
+    const [httpsUrl, httpUrl] = combined.split('||')
+    const urlsToTry = [httpsUrl, httpUrl].filter(Boolean)
+
+    let lastErr: Error | null = null
+    for (const url of urlsToTry) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/xml' },
+          body: xmlBody,
+          mode: 'cors',
+          credentials: 'omit',
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`)
+        }
+
+        const responseText = await response.text()
+        const parsed = parseXmlResponse(responseText)
+        const error = parsed.error as number
+
+        if (error !== undefined && error !== 0) {
+          throw new Error(`CGI error: ${error}`)
+        }
+
+        return parsed
+      } catch (e: any) {
+        lastErr = e instanceof Error ? e : new Error(String(e))
+        console.warn('sendRawXml failed, trying next URL:', lastErr.message)
+        continue
+      }
+    }
+
+    throw lastErr ?? new Error('sendRawXml failed on all proxy URLs')
   }
 }
