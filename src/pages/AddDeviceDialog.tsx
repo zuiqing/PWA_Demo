@@ -14,12 +14,12 @@ interface AddDeviceDialogProps {
 
 export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDialogProps) {
   const { t } = useLanguage()
-  const [form, setForm] = useState({ deviceId: '', deviceName: '', username: 'admin', password: 'admin' })
+  const [form, setForm] = useState({ deviceId: '', deviceName: '', password: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const handleClose = () => {
-    setForm({ deviceId: '', deviceName: '', username: 'admin', password: 'admin' })
+    setForm({ deviceId: '', deviceName: '', password: '' })
     setError('')
     setSaving(false)
     onClose()
@@ -41,12 +41,21 @@ export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDi
     setSaving(true)
     setError('')
     try {
+      // 对密码进行SHA256加密
+      const hashPassword = async (text: string): Promise<string> => {
+        const encoder = new TextEncoder()
+        const data = encoder.encode(text)
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+      }
+
       const device: DeviceInfo = {
         id: form.deviceId,
         name: form.deviceName || form.deviceId,
         credentials: {
-          username: form.username,
-          password: form.password
+          username: 'adminapp2',
+          password: await hashPassword(form.password)
         },
       }
       await onSubmit(device)
@@ -101,15 +110,6 @@ export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDi
           helperText={t('addDevice.deviceNameHint')}
         />
         <TextField
-          label={t('addDevice.username')}
-          fullWidth
-          margin="dense"
-          size="small"
-          value={form.username}
-          onChange={updateField('username')}
-          helperText={t('addDevice.usernameHint')}
-        />
-        <TextField
           label={t('addDevice.password')}
           fullWidth
           margin="dense"
@@ -117,7 +117,7 @@ export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDi
           type="password"
           value={form.password}
           onChange={updateField('password')}
-          helperText={t('addDevice.passwordHint')}
+          helperText="输入设备密码，将自动进行SHA256加密"
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
