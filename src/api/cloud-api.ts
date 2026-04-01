@@ -99,10 +99,13 @@ export async function connectToDevice(
     ])
     
     // 添加设备凭证信息
+    // CGI访问使用用户的凭证（SHA256加密后）
     httpAddr.username = credentials.username
     httpAddr.password = credentials.password
-    rtspAddr.username = credentials.username
-    rtspAddr.password = credentials.password
+    
+    // RTSP拉流使用固定的 admin:admin 凭证
+    rtspAddr.username = 'admin'
+    rtspAddr.password = 'admin'
     
     return {
       httpAddr,
