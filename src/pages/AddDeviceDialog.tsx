@@ -55,7 +55,8 @@ export default function AddDeviceDialog({ open, onClose, onSubmit }: AddDeviceDi
         name: form.deviceName || form.deviceId,
         credentials: {
           username: 'adminapp2',
-          password: await hashPassword(form.password)
+          password: await hashPassword(form.password),
+          rawPassword: form.password
         },
       }
       await onSubmit(device)

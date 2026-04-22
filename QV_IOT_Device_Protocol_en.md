@@ -3,7 +3,7 @@
 2. Call QV Open Platform API Interface
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/__puml/d1bc4c783ba4469582954f80f9499d38.svg)
+![](image/img_1.svg)
 
 # Document Overview
 ## API Interface Usage
@@ -11,33 +11,33 @@
 Set Authorization in http header
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/0/2025/png/35497818/1756436175943-ca8848d5-5a6f-4c68-be86-6452c910e959.png)
+![](image/img_2.png)
 
 Send request, receive response
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/0/2025/png/35497818/1756436059272-69118fae-85be-46b6-b6c5-44aa8c6f154b.png)
+![](image/img_3.png)
 
 1.2 http request authorization address, in the form of: ip+port.
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/0/2025/png/35497818/1756436059323-2baf7299-bfbb-4843-bd0e-982ae6f56ee9.png)
+![](image/img_4.png)
 
 ### 2.1 RTSP Streaming
 Set Authorization in http header
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/0/2025/png/35497818/1756436175943-ca8848d5-5a6f-4c68-be86-6452c910e959.png?x-oss-process=image%2Fformat%2Cwebp)
+![](image/img_5.png)
 
 Send request, receive response
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/0/2025/png/35497818/1756436059486-05c1118e-ea9a-46dc-89d6-48320109396d.png)
+![](image/img_6.png)
 
 2.1 Use ffplay to pull rtsp protocol stream from authorization address.
 
 <!-- 这是一张图片，ocr 内容为： -->
-![](https://cdn.nlark.com/yuque/0/2025/png/35497818/1756436059534-5415a233-f86b-4e03-b74a-cc97629e52ec.png)
+![](image/img_7.png)
 
 ## Glossary
 **<font style="color:rgba(0, 0, 0, 0.85);">Open Platform</font>**

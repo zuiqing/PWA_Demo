@@ -1,6 +1,7 @@
 export interface DeviceCredentials {
   username: string
   password: string
+  rawPassword?: string
 }
 
 export interface RemoteAddr {

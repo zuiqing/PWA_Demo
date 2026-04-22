@@ -103,9 +103,9 @@ export async function connectToDevice(
     httpAddr.username = credentials.username
     httpAddr.password = credentials.password
     
-    // RTSP拉流使用固定的 admin:admin 凭证
+    // RTSP拉流使用固定用户名admin，密码使用用户输入的原始密码
     rtspAddr.username = 'admin'
-    rtspAddr.password = 'admin'
+    rtspAddr.password = credentials.rawPassword ?? credentials.password
     
     return {
       httpAddr,
