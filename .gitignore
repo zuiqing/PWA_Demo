@@ -16,6 +16,8 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+*.pem
+aws-APP-20250916.pem
 
 # Logs
 *.log
