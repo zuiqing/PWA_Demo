@@ -146,6 +146,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/cloud/, ''),
       },
+      '/api/events': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   }
 })

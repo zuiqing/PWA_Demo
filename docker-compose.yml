@@ -1,6 +1,23 @@
 version: '3'
 
 services:
+  event-api:
+    build: ./server
+    container_name: monitor-event-api
+    environment:
+      - NODE_ENV=production
+      - EVENT_API_PORT=3001
+      - EVENT_DB_PATH=/app/data/events.sqlite
+      - EVENT_WEBHOOK_TOKEN=
+    volumes:
+      - ./event-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/api/events/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   mediamtx:
     image: bluenviron/mediamtx:latest
     container_name: mediamtx
@@ -18,4 +35,6 @@ services:
     volumes:
       - ./dist:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - event-api
     restart: unless-stopped

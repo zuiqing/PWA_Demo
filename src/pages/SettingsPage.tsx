@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AppBar, Toolbar, Typography, Container, Box, TextField,
-  Button, Snackbar, Alert, Card, CardContent, IconButton,
-  ToggleButton, ToggleButtonGroup,
+  Button, Snackbar, Alert, Card, CardContent,
+  ToggleButton, ToggleButtonGroup, BottomNavigation, BottomNavigationAction,
 } from '@mui/material'
-import { ArrowBack, Save, Key, Description, Language } from '@mui/icons-material'
+import { Save, Key, Description, Settings, Videocam, NotificationsActive } from '@mui/icons-material'
 import { useLanguage } from '../context/LanguageContext'
 
 const DEFAULT_API_KEY_SECRET = 'ApiKey kE3FMfbjVYE8QkwkpyFh2Tfn:crow'
@@ -55,9 +55,7 @@ export default function SettingsPage() {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="fixed" elevation={0} sx={{ background: 'linear-gradient(135deg, #0D47A1 0%, #1565C0 100%)' }}>
         <Toolbar>
-          <IconButton color="inherit" edge="start" onClick={() => navigate(-1)} sx={{ mr: 1 }}>
-            <ArrowBack />
-          </IconButton>
+          <Settings sx={{ mr: 1.5 }} />
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>{t('app.settings')}</Typography>
           <ToggleButtonGroup
             value={language}
@@ -84,7 +82,7 @@ export default function SettingsPage() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="sm" sx={{ flex: 1, pt: 10, pb: 4, overflow: 'auto' }}>
+      <Container maxWidth="sm" sx={{ flex: 1, pt: 10, pb: 12, overflow: 'auto' }}>
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -202,6 +200,14 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </Container>
+
+      <Box sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'background.paper', borderTop: '1px solid #E0E0E0' }}>
+        <BottomNavigation value={2} showLabels>
+          <BottomNavigationAction label={t('common.devices')} icon={<Videocam />} onClick={() => navigate('/')} />
+          <BottomNavigationAction label={t('common.alarms')} icon={<NotificationsActive />} onClick={() => navigate('/alarms')} />
+          <BottomNavigationAction label={t('common.settings')} icon={<Settings />} onClick={() => navigate('/settings')} />
+        </BottomNavigation>
+      </Box>
 
       <Snackbar open={toast.open} autoHideDuration={3000} onClose={() => setToast(p => ({ ...p, open: false }))}>
         <Alert severity={toast.severity} onClose={() => setToast(p => ({ ...p, open: false }))}>

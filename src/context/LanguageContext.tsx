@@ -15,6 +15,11 @@ const translations: Record<Language, Record<string, string>> = {
     'common.settings': 'Settings',
     'common.back': 'Back',
     'common.devices': 'Devices',
+    'common.alarms': 'Alarms',
+    'common.all': 'All',
+    'common.search': 'Search',
+    'common.prev': 'Previous',
+    'common.next': 'Next',
 
     // Device list page
     'device.list.title': 'Device List',
@@ -31,6 +36,24 @@ const translations: Record<Language, Record<string, string>> = {
     'device.list.added': 'Device {name} added successfully',
     'device.list.deleted': 'Device {name} deleted',
     'device.list.connectionRefreshed': 'Connection refreshed',
+
+    // Alarm page
+    'alarm.stats.total': 'Total',
+    'alarm.stats.today': 'Today',
+    'alarm.filter.keyword': 'Search device, alarm ID, or type',
+    'alarm.filter.command': 'Message Type',
+    'alarm.filter.state': 'Alarm State',
+    'alarm.empty': 'No alarm records',
+    'alarm.record': 'Alarm Record',
+    'alarm.alarmId': 'Alarm ID',
+    'alarm.alarmTime': 'Alarm Time',
+    'alarm.detail': 'Alarm Detail',
+    'alarm.command': 'Command',
+    'alarm.state': 'State',
+    'alarm.receivedAt': 'Received At',
+    'alarm.openRecord': 'Open Record',
+    'alarm.openSubRecord': 'Open Snapshot',
+    'alarm.rawPayload': 'Raw Payload',
 
     // Settings page
     'app.settings': 'Settings',
@@ -135,6 +158,11 @@ const translations: Record<Language, Record<string, string>> = {
     'common.settings': '设置',
     'common.back': '返回',
     'common.devices': '设备',
+    'common.alarms': '报警',
+    'common.all': '全部',
+    'common.search': '搜索',
+    'common.prev': '上一页',
+    'common.next': '下一页',
 
     // Device list page
     'device.list.title': '设备列表',
@@ -151,6 +179,24 @@ const translations: Record<Language, Record<string, string>> = {
     'device.list.added': '设备 {name} 添加成功',
     'device.list.deleted': '设备 {name} 已删除',
     'device.list.connectionRefreshed': '连接已刷新',
+
+    // Alarm page
+    'alarm.stats.total': '总数',
+    'alarm.stats.today': '今日',
+    'alarm.filter.keyword': '搜索设备、报警ID或类型',
+    'alarm.filter.command': '消息类型',
+    'alarm.filter.state': '报警状态',
+    'alarm.empty': '暂无报警记录',
+    'alarm.record': '报警记录',
+    'alarm.alarmId': '报警 ID',
+    'alarm.alarmTime': '报警时间',
+    'alarm.detail': '报警详情',
+    'alarm.command': '命令',
+    'alarm.state': '状态',
+    'alarm.receivedAt': '接收时间',
+    'alarm.openRecord': '查看录像/图片',
+    'alarm.openSubRecord': '查看伴生资源',
+    'alarm.rawPayload': '原始报文',
 
     // Settings page
     'app.settings': '设置',

@@ -5,7 +5,7 @@ import {
   Box, IconButton, Snackbar, Alert, Fab, BottomNavigation,
   BottomNavigationAction, ToggleButton, ToggleButtonGroup,
 } from '@mui/material'
-import { Add, Videocam, Delete, Refresh, Settings, BugReport } from '@mui/icons-material'
+import { Add, Videocam, Delete, Refresh, Settings, BugReport, NotificationsActive } from '@mui/icons-material'
 import { useDeviceContext } from '../context/DeviceContext'
 import { useLanguage } from '../context/LanguageContext'
 import AddDeviceDialog from './AddDeviceDialog'
@@ -155,6 +155,7 @@ export default function DeviceListPage() {
       <Box sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: 'background.paper', borderTop: '1px solid #E0E0E0' }}>
         <BottomNavigation value={navValue} onChange={(_, v) => setNavValue(v)} showLabels>
           <BottomNavigationAction label={t('common.devices')} icon={<Videocam />} onClick={() => navigate('/')} />
+          <BottomNavigationAction label={t('common.alarms')} icon={<NotificationsActive />} onClick={() => navigate('/alarms')} />
           <BottomNavigationAction label={t('common.settings')} icon={<Settings />} onClick={() => navigate('/settings')} />
         </BottomNavigation>
       </Box>
